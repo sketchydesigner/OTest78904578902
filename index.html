@@ -59,7 +59,8 @@
   .nav-left { display: flex; align-items: center; }
 
   /* Official UFC + On Location double logo (outlined-vector SVG from Figma) */
-  .nav-logo { display: block; height: 40px; width: auto; }
+  /* Native size of the supplied SVG: 262 x 34 */
+  .nav-logo { display: block; height: 34px; width: auto; }
 
   .nav-right {
     display: flex;
@@ -351,6 +352,13 @@
   @media (max-width: 460px) {
     .nav-right .nav-login { display: none; }
     .headline-art { width: clamp(190px, 60vw, 260px); }
+  }
+
+  /* At 1440 and up: 96px site edge gutter for content.
+     The hero video sits on .hero (full-bleed), so it is unaffected. */
+  @media (min-width: 1440px) {
+    .hero-inner { padding-left: 96px; padding-right: 96px; }
+    .fights-inner { padding-left: 96px; padding-right: 96px; }
   }
 </style>
 </head>
