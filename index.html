@@ -59,8 +59,8 @@
   .nav-left { display: flex; align-items: center; }
 
   /* Official UFC + On Location double logo (outlined-vector SVG from Figma) */
-  /* Native size of the supplied SVG: 262 x 34 */
-  .nav-logo { display: block; height: 34px; width: auto; }
+  /* Native size of the supplied SVG: 262 x 34; shown 10% smaller */
+  .nav-logo { display: block; height: 30.6px; width: auto; }
 
   .nav-right {
     display: flex;
@@ -71,6 +71,17 @@
   .nav-right a { color: #e8e8e8; text-decoration: none; }
   .nav-right a:hover { color: #fff; }
   .nav-phone { color: var(--text-muted); display: flex; align-items: center; gap: 9px; }
+
+  /* Hamburger: hidden on desktop, shown on mobile */
+  .nav-hamburger {
+    display: none;
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+  }
 
   /* ---------- Hero ---------- */
   .hero {
@@ -125,17 +136,20 @@
     letter-spacing: 3px;
     font-weight: 600;
     color: #e8e8e8;
-    margin-bottom: 2px;
+    margin-bottom: 16px;
+    /* Shift right so it lines up with the "U" in the logo below
+       (the U starts ~7% in from the SVG's left edge) */
+    margin-left: calc(clamp(220px, 26vw, 340px) * 0.07);
   }
 
   /* Headline lockup (official outlined-vector SVG from Figma).
-     The SVG carries empty space above the UFC mark, so we pull it up
-     (scaled to its own width) to sit close to the eyebrow, as in Figma. */
+     This artwork is tightly cropped (content starts at the top edge),
+     so it sits just below the eyebrow with a small gap. */
   .headline-art {
     display: block;
     width: clamp(220px, 26vw, 340px);
     height: auto;
-    margin-top: clamp(-64px, -4.6vw, -42px);
+    margin-top: 0;
     margin-bottom: 22px;
   }
 
@@ -190,6 +204,9 @@
     padding-bottom: 6px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;            /* Firefox */
+    /* Soft fade where cards are cut off on the right (under the arrow) */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 130px), transparent 100%);
+            mask-image: linear-gradient(to right, #000 calc(100% - 130px), transparent 100%);
   }
   .carousel::-webkit-scrollbar { display: none; }  /* WebKit */
 
@@ -343,15 +360,64 @@
   .section-divider { height: 3px; background: var(--ufc-red); width: 100%; }
 
   /* ---------- Responsive ---------- */
-  @media (max-width: 760px) {
+
+  /* Tablet */
+  @media (max-width: 900px) and (min-width: 701px) {
     .nav-right { gap: 14px; font-size: 13px; }
     .nav-phone span { display: none; }
-    .hero { min-height: 380px; }
+    .hero { min-height: 420px; }
     .hero-inner { padding: 48px 22px; }
   }
-  @media (max-width: 460px) {
-    .nav-right .nav-login { display: none; }
-    .headline-art { width: clamp(190px, 60vw, 260px); }
+
+  /* Mobile (<= 700px): single column, hamburger nav, stacked media band */
+  @media (max-width: 700px) {
+    /* Nav: swap links for a hamburger */
+    .nav { height: 52px; padding: 0 16px; }
+    .nav-right { display: none; }
+    .nav-hamburger { display: inline-flex; }
+    .nav-logo { height: 27px; }
+
+    /* Hero stacks: text first, then a full-width media band */
+    .hero {
+      flex-direction: column;
+      align-items: stretch;
+      min-height: 0;
+    }
+    .hero-inner {
+      order: 1;
+      position: relative;
+      z-index: 2;
+      max-width: none;
+      padding: 36px 24px 22px;
+    }
+    .hero-media {
+      order: 2;
+      position: static;
+      inset: auto;
+      left: auto;
+      width: 100%;
+      height: 244px;
+      /* Mobile: fade top & bottom into black; left/right full-bleed */
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
+              mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 82%, transparent 100%);
+    }
+
+    /* Headline (mobile lockup via <picture>) fills the width;
+       eyebrow returns to the content's left edge */
+    .eyebrow { margin-left: 0; font-size: 11px; }
+    .headline-art { width: 100%; max-width: 340px; height: auto; }
+    .hero-sub { max-width: none; font-size: 14px; }
+
+    /* Carousel gutters */
+    .fights { padding-top: 4px; }
+    .fights-inner { padding: 0 24px; }
+    .fights-label { font-size: 11px; }
+  }
+
+  @media (max-width: 420px) {
+    .headline-art { max-width: 300px; }
+    .hero-inner { padding: 30px 20px 20px; }
+    .fights-inner { padding: 0 20px; }
   }
 
   /* At 1440 and up: 96px site edge gutter for content.
@@ -382,6 +448,11 @@
           </svg>
         </span>
       </div>
+      <button class="nav-hamburger" aria-label="Open menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M3 6h18M3 12h18M3 18h18" stroke="#e8e8e8" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
     </nav>
   </div>
 
@@ -404,7 +475,10 @@
     <div class="hero-inner">
       <p class="eyebrow">BE CAGESIDE WITH</p>
 
-      <img class="headline-art" src="assets/headline.svg" alt="UFC VIP Experience" />
+      <picture>
+        <source media="(max-width: 700px)" srcset="assets/headline-mobile.svg" />
+        <img class="headline-art" src="assets/headline.svg" alt="UFC VIP Experience" />
+      </picture>
 
       <p class="hero-sub">Prime seats, official weigh-in access, backstage tours, and UFC athlete meet &amp; greets.</p>
 
