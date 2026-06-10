@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>UFC VIP Experience</title>
+
+<!--
+  Fonts load from the Google Fonts CDN below. They render in the viewer's browser
+  at page-load time, so they work on GitHub Pages with NO font files to host.
+    - Inter           -> body / nav text
+    - Saira Condensed -> headline lockup (approximates the FS Industrie condensed brand face)
+
+  The headline lockup uses the official outlined-vector art at /assets/headline.svg.
+  The nav logo uses /assets/nav-logo.svg.
+
+  Hero media lives in /assets/hero.mp4 inside the .hero-media frame, which fades
+  on 3 edges. To swap the video for a still image, replace the <video> with an
+  <img> (see the note in the markup). An optional /assets/hero-poster.jpg shows
+  as the first frame while the video loads.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --ufc-red: #d20a0a;
+    --bg-black: #000000;
+    --nav-bg: #1a1a1d;
+    --text-muted: #b3b3b3;
+    --text-faint: #8a8a8a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg-black);
+    color: #fff;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Top navigation ---------- */
+  .nav-wrap { padding: 12px 16px 0; }
+
+  .nav {
+    max-width: 1536px;
+    margin: 0 auto;
+    background: var(--nav-bg);
+    border-radius: 10px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+  }
+
+  .nav-left { display: flex; align-items: center; }
+
+  /* Official UFC + On Location double logo (outlined-vector SVG from Figma) */
+  .nav-logo { display: block; height: 40px; width: auto; }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    font-size: 14px;
+  }
+  .nav-right a { color: #e8e8e8; text-decoration: none; }
+  .nav-right a:hover { color: #fff; }
+  .nav-phone { color: var(--text-muted); display: flex; align-items: center; gap: 9px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    min-height: 540px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    background: #000;
+  }
+
+  /* Media frame: pinned to the right, fades into black on 3 edges (top, left,
+     bottom) while the right edge runs full-bleed. The fade lives HERE, on the
+     wrapper — so the inner element can be swapped video <-> image freely. */
+  .hero-media {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 36%;
+    z-index: 0;
+    -webkit-mask-image:
+      linear-gradient(to right, transparent 0%, #000 32%),
+      linear-gradient(to bottom, transparent 0%, #000 15%, #000 85%, transparent 100%);
+    -webkit-mask-composite: source-in;
+            mask-image:
+      linear-gradient(to right, transparent 0%, #000 32%),
+      linear-gradient(to bottom, transparent 0%, #000 15%, #000 85%, transparent 100%);
+            mask-composite: intersect;
+  }
+  /* The swappable element. A <video> today; replace with an <img> later and
+     this same rule keeps it sized and clipped identically. */
+  .hero-media__el {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .hero-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 1536px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 64px 38px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 3px;
+    font-weight: 600;
+    color: #e8e8e8;
+    margin-bottom: 2px;
+  }
+
+  /* Headline lockup (official outlined-vector SVG from Figma).
+     The SVG carries empty space above the UFC mark, so we pull it up
+     (scaled to its own width) to sit close to the eyebrow, as in Figma. */
+  .headline-art {
+    display: block;
+    width: clamp(220px, 26vw, 340px);
+    height: auto;
+    margin-top: clamp(-64px, -4.6vw, -42px);
+    margin-bottom: 22px;
+  }
+
+  .hero-sub {
+    max-width: 360px;
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1.5;
+    margin-bottom: 28px;
+  }
+
+  .btn-experience {
+    display: inline-block;
+    border: 1px solid #fff;
+    border-radius: 999px;
+    padding: 13px 26px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    text-decoration: none;
+    background: transparent;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .btn-experience:hover { background: #fff; color: #000; }
+
+  /* ---------- Fights carousel ---------- */
+  .fights {
+    background: #000;
+    padding: 6px 0 40px;
+  }
+  .fights-inner {
+    max-width: 1536px;
+    margin: 0 auto;
+    padding: 0 38px;
+    position: relative;
+  }
+  .fights-label {
+    font-size: 12px;
+    letter-spacing: 2px;
+    font-weight: 600;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .carousel {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;            /* Firefox */
+  }
+  .carousel::-webkit-scrollbar { display: none; }  /* WebKit */
+
+  .fight-card {
+    flex: 0 0 auto;
+    height: 160px;
+    scroll-snap-align: start;
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0e0e10;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  /* Hover: lift the card and zoom the poster (matches the prototype) */
+  .fight-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Left text panel */
+  .fc-info {
+    flex: 0 0 150px;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .fc-badge {
+    line-height: 1;
+    margin-bottom: auto;
+  }
+  .fc-badge .ufc {
+    font-family: "Saira Condensed", sans-serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--ufc-red);
+    display: inline-block;
+    transform: skewX(-4deg);
+  }
+  .fc-badge .sub {
+    display: block;
+    font-family: "Saira Condensed", sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: #fff;
+    margin-top: 2px;
+  }
+  .fc-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+  .fc-date {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Right poster image (swappable slot; gradient fallback until assets land) */
+  /* Square image panel (sized to card height) so square posters never crop */
+  .fc-media {
+    flex: 0 0 160px;
+    aspect-ratio: 1 / 1;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #2a0b0b 0%, #111 60%, #1c0606 100%);
+  }
+  .fc-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.45s ease;
+  }
+  .fight-card:hover .fc-media img { transform: scale(1.07); }
+  /* Subtle darken sweep on hover */
+  .fc-media::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0) 55%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1;
+  }
+  .fight-card:hover .fc-media::after { opacity: 1; }
+
+  /* Thin faded glow that sweeps right -> left across the poster on hover */
+  .fc-media::before {
+    content: "";
+    position: absolute;
+    top: -10%;
+    bottom: -10%;
+    left: 0;
+    width: 45%;
+    background: linear-gradient(
+      to left,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.22) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: translateX(260%) skewX(-12deg);
+    opacity: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .fight-card:hover .fc-media::before { animation: sheen-sweep 0.75s ease-out forwards; }
+  @keyframes sheen-sweep {
+    0%   { transform: translateX(260%) skewX(-12deg); opacity: 0; }
+    12%  { opacity: 1; }
+    100% { transform: translateX(-170%) skewX(-12deg); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fight-card, .fc-media img { transition: none; }
+    .fight-card:hover { transform: none; }
+    .fight-card:hover .fc-media img { transform: none; }
+    .fight-card:hover .fc-media::before { animation: none; }
+  }
+
+  /* Next-arrow scroll control */
+  .carousel-next {
+    position: absolute;
+    top: calc(50% + 14px);
+    right: 18px;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(20, 20, 22, 0.85);
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    transition: background 0.15s ease;
+    z-index: 3;
+  }
+  .carousel-next:hover { background: rgba(50, 50, 54, 0.95); }
+
+  .section-divider { height: 3px; background: var(--ufc-red); width: 100%; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 760px) {
+    .nav-right { gap: 14px; font-size: 13px; }
+    .nav-phone span { display: none; }
+    .hero { min-height: 380px; }
+    .hero-inner { padding: 48px 22px; }
+  }
+  @media (max-width: 460px) {
+    .nav-right .nav-login { display: none; }
+    .headline-art { width: clamp(190px, 60vw, 260px); }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ======================= TOP NAVIGATION ======================= -->
+  <div class="nav-wrap">
+    <nav class="nav">
+      <div class="nav-left">
+        <img class="nav-logo" src="assets/nav-logo.svg" alt="UFC — powered by On Location" />
+      </div>
+      <div class="nav-right">
+        <a class="nav-login" href="#">Log In</a>
+        <a href="#">Sign up</a>
+        <span class="nav-phone">
+          <span>800.591.9198</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M4 13v-1a8 8 0 0 1 16 0v1" stroke="#b3b3b3" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="3" y="13" width="4" height="7" rx="1.5" stroke="#b3b3b3" stroke-width="1.6"/>
+            <rect x="17" y="13" width="4" height="7" rx="1.5" stroke="#b3b3b3" stroke-width="1.6"/>
+          </svg>
+        </span>
+      </div>
+    </nav>
+  </div>
+
+  <!-- ============================ HERO ============================ -->
+  <header class="hero">
+
+    <!-- Hero media frame (fades on 3 edges via .hero-media mask) -->
+    <div class="hero-media">
+      <video class="hero-media__el" autoplay muted loop playsinline
+             poster="assets/hero-poster.jpg">
+        <source src="assets/hero.mp4" type="video/mp4" />
+      </video>
+      <!--
+        TO SWAP FOR AN IMAGE LATER: delete the <video>…</video> above and use:
+        <img class="hero-media__el" src="assets/hero.jpg" alt="" />
+        Nothing else needs to change — the 3-edge fade stays on .hero-media.
+      -->
+    </div>
+
+    <div class="hero-inner">
+      <p class="eyebrow">BE CAGESIDE WITH</p>
+
+      <img class="headline-art" src="assets/headline.svg" alt="UFC VIP Experience" />
+
+      <p class="hero-sub">Prime seats, official weigh-in access, backstage tours, and UFC athlete meet &amp; greets.</p>
+
+      <a class="btn-experience" href="#">Book Your Experience</a>
+    </div>
+  </header>
+
+  <!-- ====================== FIGHTS CAROUSEL ====================== -->
+  <!--
+    Each card's poster is a swappable slot: drop assets/fight-1.jpg … fight-5.jpg
+    (export the posters from Figma). Until then, a tinted gradient shows.
+    The left panel (badge + title + date) is live text and fully editable here.
+  -->
+  <section class="fights">
+    <div class="fights-inner">
+      <p class="fights-label">Upcoming Fights — VIP Packages</p>
+
+      <div class="carousel" id="carousel">
+
+        <a class="fight-card" href="#">
+          <div class="fc-info">
+            <div class="fc-badge"><span class="ufc">UFC</span><span class="sub">FIGHT NIGHT</span></div>
+            <div class="fc-title">UFC Fight Night</div>
+            <div class="fc-date">June 20 · Sat</div>
+          </div>
+          <div class="fc-media"><img src="assets/fight-1.jpg" alt="" loading="lazy" onerror="this.remove()" /></div>
+        </a>
+
+        <a class="fight-card" href="#">
+          <div class="fc-info">
+            <div class="fc-badge"><span class="ufc">UFC</span><span class="sub">329</span></div>
+            <div class="fc-title">McGregor vs Holloway 2</div>
+            <div class="fc-date">June 20 · Sat</div>
+          </div>
+          <div class="fc-media"><img src="assets/fight-2.jpg" alt="" loading="lazy" onerror="this.remove()" /></div>
+        </a>
+
+        <a class="fight-card" href="#">
+          <div class="fc-info">
+            <div class="fc-badge"><span class="ufc">UFC</span><span class="sub">FIGHT NIGHT</span></div>
+            <div class="fc-title">Oklahoma City</div>
+            <div class="fc-date">June 20 · Sat</div>
+          </div>
+          <div class="fc-media"><img src="assets/fight-3.jpg" alt="" loading="lazy" onerror="this.remove()" /></div>
+        </a>
+
+        <a class="fight-card" href="#">
+          <div class="fc-info">
+            <div class="fc-badge"><span class="ufc">UFC</span><span class="sub">329</span></div>
+            <div class="fc-title">Medic vs Rodriguez</div>
+            <div class="fc-date">Jul 11 · Sat</div>
+          </div>
+          <div class="fc-media"><img src="assets/fight-4.jpg" alt="" loading="lazy" onerror="this.remove()" /></div>
+        </a>
+
+        <a class="fight-card" href="#">
+          <div class="fc-info">
+            <div class="fc-badge"><span class="ufc">UFC</span><span class="sub">FIGHT NIGHT</span></div>
+            <div class="fc-title">Philadelphia</div>
+            <div class="fc-date">Aug 15 · Sat</div>
+          </div>
+          <div class="fc-media"><img src="assets/fight-5.jpg" alt="" loading="lazy" onerror="this.remove()" /></div>
+        </a>
+
+      </div>
+
+      <button class="carousel-next" id="carouselNext" aria-label="Next fights">&#10095;</button>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <script>
+    (function () {
+      var track = document.getElementById('carousel');
+      var next = document.getElementById('carouselNext');
+      if (track && next) {
+        next.addEventListener('click', function () {
+          var card = track.querySelector('.fight-card');
+          var step = card ? card.getBoundingClientRect().width + 18 : 340;
+          // loop back to the start once the end is reached
+          if (track.scrollLeft + track.clientWidth >= track.scrollWidth - 4) {
+            track.scrollTo({ left: 0, behavior: 'smooth' });
+          } else {
+            track.scrollBy({ left: step, behavior: 'smooth' });
+          }
+        });
+      }
+    })();
+  </script>
+
+</body>
+</html>
