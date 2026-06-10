@@ -208,6 +208,14 @@
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 130px), transparent 100%);
             mask-image: linear-gradient(to right, #000 calc(100% - 130px), transparent 100%);
   }
+  /* During the entrance: no scroll-snap and clip the off-screen cards, so the
+     growing scroll width doesn't fight the slide-in (kills the stutter + snap). */
+  .carousel.is-animating {
+    overflow-x: hidden;
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+  }
+  .carousel.is-animating .fight-card { will-change: translate, opacity; }
   .carousel::-webkit-scrollbar { display: none; }  /* WebKit */
 
   .fight-card {
@@ -573,6 +581,15 @@
     (function () {
       var track = document.getElementById('carousel');
       var next = document.getElementById('carouselNext');
+
+      // Freeze scroll-snap/overflow while the cards slide in, then restore it.
+      if (track) {
+        track.classList.add('is-animating');
+        window.setTimeout(function () {
+          track.classList.remove('is-animating');
+        }, 1150);
+      }
+
       if (track && next) {
         next.addEventListener('click', function () {
           var card = track.querySelector('.fight-card');
