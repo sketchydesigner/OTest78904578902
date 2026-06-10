@@ -405,7 +405,8 @@
     /* Headline (mobile lockup via <picture>) fills the width;
        eyebrow returns to the content's left edge */
     .eyebrow { margin-left: 0; font-size: 11px; }
-    .headline-art { width: 100%; max-width: 340px; height: auto; }
+    /* Mobile uses the wide "long" lockup — let it fill the content width */
+    .headline-art { width: 100%; max-width: 360px; height: auto; }
     .hero-sub { max-width: none; font-size: 14px; }
 
     /* Carousel gutters */
@@ -415,7 +416,7 @@
   }
 
   @media (max-width: 420px) {
-    .headline-art { max-width: 300px; }
+    .headline-art { max-width: 320px; }
     .hero-inner { padding: 30px 20px 20px; }
     .fights-inner { padding: 0 20px; }
   }
