@@ -221,7 +221,23 @@
     text-decoration: none;
     color: inherit;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    /* Page-load entrance: slide in from the right + fade, 1000ms.
+       Smooth ease-in-out (no backward overshoot) so cards never overlap as they
+       settle. Uses the `translate` property (not `transform`) so the hover lift
+       still works. */
+    opacity: 0;
+    animation: card-in 1000ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
   }
+  @keyframes card-in {
+    from { opacity: 0; translate: var(--start-x, 180px) 0; }
+    to   { opacity: 1; translate: 0 0; }
+  }
+  /* Each card starts further right than the last (180, then +280 each) */
+  .fight-card:nth-child(1) { --start-x: 180px; }
+  .fight-card:nth-child(2) { --start-x: 460px; }
+  .fight-card:nth-child(3) { --start-x: 740px; }
+  .fight-card:nth-child(4) { --start-x: 1020px; }
+  .fight-card:nth-child(5) { --start-x: 1300px; }
   /* Hover: lift the card and zoom the poster (matches the prototype) */
   .fight-card:hover {
     transform: translateY(-4px);
@@ -329,6 +345,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .fight-card, .fc-media img { transition: none; }
+    .fight-card { opacity: 1; animation: none; }
     .fight-card:hover { transform: none; }
     .fight-card:hover .fc-media img { transform: none; }
     .fight-card:hover .fc-media::before { animation: none; }
