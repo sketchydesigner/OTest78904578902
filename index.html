@@ -654,8 +654,9 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.05;
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // Shadow maps off: the only caster (chain-link) produced a harsh solid
+        // shadow line; the cage's soft shadow is baked into the mat texture.
+        renderer.shadowMap.enabled = false;
 
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x000000, 0.013);
@@ -682,6 +683,12 @@
               g.fillRect(0, 0, 30 + Math.random() * 120, 2 + Math.random() * 3);
               g.restore();
             }
+            // Baked soft cage shadow: a gentle dark ring under the fence line
+            const sh = g.createRadialGradient(512, 512, 320, 512, 512, 460);
+            sh.addColorStop(0, 'rgba(0,0,0,0)');
+            sh.addColorStop(0.5, 'rgba(0,0,0,0.14)');
+            sh.addColorStop(1, 'rgba(0,0,0,0)');
+            g.fillStyle = sh; g.fillRect(0, 0, 1024, 1024);
             g.strokeStyle = '#d20a0a'; g.lineWidth = 44; g.beginPath();   // red octagon border
             for (let k = 0; k <= 8; k++) {
               const a = k / 8 * Math.PI * 2 + Math.PI / 8;
@@ -808,7 +815,9 @@
           const panel = new THREE.Mesh(panelGeo, fenceMat);
           panel.position.set(mx, DECK_H + FENCE_H / 2, mz);
           panel.rotation.y = ang;
-          panel.castShadow = true;
+          // No shadow casting: the depth pass renders the chain-link as a solid
+          // slab, which projected a hard octagonal line onto the mat. A soft
+          // shadow ring is baked into the mat texture instead.
           octagon.add(panel);
 
           const rail = new THREE.Mesh(railGeo, railMat);
@@ -980,9 +989,6 @@
         // of cutting a hard circle across the mat
         const spot = new THREE.SpotLight(0xfff1d6, 1000, 0, 0.47, 0.95, 2);
         spot.position.set(0, 20.3, 0);
-        spot.castShadow = true;
-        spot.shadow.mapSize.set(2048, 2048);
-        spot.shadow.bias = -0.0003;
         scene.add(spot); scene.add(spot.target);
 
         const rim1 = new THREE.SpotLight(0x6f86c2, 420, 0, 0.6, 0.7, 2);
@@ -996,32 +1002,37 @@
         // fading to nothing at the mat) + three nested cones for a soft falloff
         // instead of one hard-edged polygon shell.
         function shaftTexture() {
+          // Fades to ZERO at both ends so the shaft never shows a hard cutoff
+          // where the cone geometry meets (or is depth-clipped by) the mat.
           const c = document.createElement('canvas'); c.width = 16; c.height = 256;
           const g = c.getContext('2d');
-          const gr = g.createLinearGradient(0, 0, 0, 256);   // canvas top = cone apex
-          gr.addColorStop(0, 'rgba(255,255,255,0.9)');
-          gr.addColorStop(0.55, 'rgba(255,255,255,0.35)');
+          const gr = g.createLinearGradient(0, 0, 0, 256);
+          gr.addColorStop(0, 'rgba(255,255,255,0)');
+          gr.addColorStop(0.25, 'rgba(255,255,255,0.8)');
+          gr.addColorStop(0.65, 'rgba(255,255,255,0.3)');
           gr.addColorStop(1, 'rgba(255,255,255,0)');
           g.fillStyle = gr; g.fillRect(0, 0, 16, 256);
           return new THREE.CanvasTexture(c);
         }
-        const coneGeo = new THREE.ConeGeometry(8.6, 19, 48, 1, true);
+        // Shaft height 17.4, centered so the cone BOTTOM sits at y=1.5 — just
+        // above the mat (y=1.1), so the glowing surface never pierces the deck.
+        const coneGeo = new THREE.ConeGeometry(8.6, 17.4, 48, 1, true);
         const coneMat = new THREE.MeshBasicMaterial({
           color: 0xfff3cf, map: shaftTexture(), transparent: true, opacity: 0.022,
           blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false
         });
         const cone = new THREE.Mesh(coneGeo, coneMat);
-        cone.position.y = 10.5;
+        cone.position.y = 10.2;
         scene.add(cone);
         const cone2 = new THREE.Mesh(coneGeo, coneMat.clone());
         cone2.material.opacity = 0.016;
         cone2.scale.set(0.7, 1, 0.7);
-        cone2.position.y = 10.5;
+        cone2.position.y = 10.2;
         scene.add(cone2);
         const cone3 = new THREE.Mesh(coneGeo, coneMat.clone());
         cone3.material.opacity = 0.02;
         cone3.scale.set(0.42, 1, 0.42);
-        cone3.position.y = 10.5;
+        cone3.position.y = 10.2;
         scene.add(cone3);
 
         const pool = new THREE.Sprite(new THREE.SpriteMaterial({
