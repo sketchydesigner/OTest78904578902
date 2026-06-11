@@ -711,7 +711,7 @@
             // matching the carousel badge treatment.
             [Math.PI / 2, Math.PI * 1.5].forEach((a) => {
               g.save();
-              g.translate(512 + Math.cos(a) * 295, 512 + Math.sin(a) * 295);
+              g.translate(512 + Math.cos(a) * 220, 512 + Math.sin(a) * 220);
               g.rotate(a + Math.PI / 2);
               g.transform(1, 0, -0.12, 1, 0, 0);
               g.fillStyle = '#d20a0a';
@@ -976,7 +976,9 @@
         scene.add(rig);
 
         // Key spot (physical units), flickers subtly in the loop
-        const spot = new THREE.SpotLight(0xfff1d6, 1050, 0, 0.40, 0.6, 2);
+        // Wide angle + heavy penumbra: the lit pool feathers out softly instead
+        // of cutting a hard circle across the mat
+        const spot = new THREE.SpotLight(0xfff1d6, 1000, 0, 0.47, 0.95, 2);
         spot.position.set(0, 20.3, 0);
         spot.castShadow = true;
         spot.shadow.mapSize.set(2048, 2048);
