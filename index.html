@@ -651,7 +651,7 @@
         const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power' });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.05;
         renderer.shadowMap.enabled = true;
@@ -722,11 +722,14 @@
         }
 
         function glowTexture(colA) {
-          const c = document.createElement('canvas'); c.width = c.height = 64;
+          // High-res, smooth radial falloff (low-res versions look blocky)
+          const c = document.createElement('canvas'); c.width = c.height = 256;
           const g = c.getContext('2d');
-          const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
-          gr.addColorStop(0, colA); gr.addColorStop(1, 'rgba(0,0,0,0)');
-          g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+          const gr = g.createRadialGradient(128, 128, 6, 128, 128, 122);
+          gr.addColorStop(0, colA);
+          gr.addColorStop(0.4, colA.replace(/[\d.]+\)$/, '0.35)'));
+          gr.addColorStop(1, 'rgba(0,0,0,0)');
+          g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
           return new THREE.CanvasTexture(c);
         }
 
@@ -762,10 +765,13 @@
         });
         fenceTex.repeat.set(sideLen / 0.45, FENCE_H / 0.45);
         const panelGeo = new THREE.PlaneGeometry(sideLen, FENCE_H);
-        const postGeo = new THREE.CylinderGeometry(0.13, 0.13, FENCE_H + 0.25, 10);
+        const postGeo = new THREE.CylinderGeometry(0.15, 0.15, FENCE_H + 0.25, 16);
         const postMat = new THREE.MeshStandardMaterial({ color: 0x141417, roughness: 0.6 });
-        const railGeo = new THREE.BoxGeometry(sideLen, 0.34, 0.18);
-        const railMat = new THREE.MeshStandardMaterial({ color: 0x101013, roughness: 0.55 });
+        const postCapGeo = new THREE.SphereGeometry(0.15, 16, 12);
+        // Padded top rail: a smooth horizontal cylinder, not a box
+        const railGeo = new THREE.CylinderGeometry(0.16, 0.16, sideLen, 14);
+        railGeo.rotateZ(Math.PI / 2);   // axis along the side direction
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x111114, roughness: 0.5 });
 
         for (let s = 0; s < 8; s++) {
           const a0 = s / 8 * Math.PI * 2 + Math.PI / 8;
@@ -788,11 +794,14 @@
           const post = new THREE.Mesh(postGeo, postMat);
           post.position.set(Math.cos(a0) * R, DECK_H + (FENCE_H + 0.25) / 2, Math.sin(a0) * R);
           octagon.add(post);
+          const cap = new THREE.Mesh(postCapGeo, postMat);
+          cap.position.set(Math.cos(a0) * R, DECK_H + FENCE_H + 0.25, Math.sin(a0) * R);
+          octagon.add(cap);
 
-          // red / blue corner pads
+          // red / blue corner pads (rounded capsules, not cubes)
           if (s === 1 || s === 5) {
             const pad = new THREE.Mesh(
-              new THREE.BoxGeometry(0.36, 0.55, 0.36),
+              new THREE.CapsuleGeometry(0.22, 0.32, 4, 14),
               new THREE.MeshStandardMaterial({ color: s === 1 ? 0xa50e0e : 0x10337e, roughness: 0.5 })
             );
             pad.position.set(Math.cos(a0) * R, DECK_H + FENCE_H - 0.2, Math.sin(a0) * R);
@@ -884,8 +893,9 @@
         const rig = new THREE.Group();
         const trussParts = [];
         const TR = 6.4, chordLen = 2 * TR * Math.sin(Math.PI / 8);
-        function addBox(w, h, d, x, y, z, ry) {
-          const g = new THREE.BoxGeometry(w, h, d);
+        function addTube(rad, len, x, y, z, ry, horizontal) {
+          const g = new THREE.CylinderGeometry(rad, rad, len, 10);
+          if (horizontal) g.rotateX(Math.PI / 2);   // axis along local Z
           g.applyMatrix4(new THREE.Matrix4().makeRotationY(ry).setPosition(x, y, z));
           trussParts.push(g);
         }
@@ -896,11 +906,11 @@
           const v1x = Math.cos(a1) * TR, v1z = Math.sin(a1) * TR;
           const mx = (v0x + v1x) / 2, mz = (v0z + v1z) / 2;
           const ang = Math.atan2(v1x - v0x, v1z - v0z);
-          addBox(0.09, 0.09, chordLen, mx, 0.45, mz, ang);   // top chord
-          addBox(0.09, 0.09, chordLen, mx, -0.45, mz, ang);  // bottom chord
-          for (let f = 1; f < 4; f++) {                      // vertical struts
+          addTube(0.05, chordLen, mx, 0.45, mz, ang, true);   // top chord
+          addTube(0.05, chordLen, mx, -0.45, mz, ang, true);  // bottom chord
+          for (let f = 1; f < 4; f++) {                       // vertical struts
             const fx = v0x + (v1x - v0x) * f / 4, fz = v0z + (v1z - v0z) * f / 4;
-            addBox(0.07, 0.9, 0.07, fx, 0, fz, 0);
+            addTube(0.035, 0.9, fx, 0, fz, 0, false);
           }
         }
         rig.add(new THREE.Mesh(
@@ -920,7 +930,7 @@
         // PAR cans + over-bright lamp cores (bloom picks these up)
         const lampMat = new THREE.MeshBasicMaterial();
         lampMat.color.setRGB(7, 6.2, 4.6);
-        const canGeo = new THREE.CylinderGeometry(0.17, 0.21, 0.42, 12);
+        const canGeo = new THREE.CylinderGeometry(0.17, 0.21, 0.42, 24);
         const canMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1e, roughness: 0.6 });
         const lampGlowMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(255,244,216,0.9)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 });
         for (let l = 0; l < 8; l++) {
@@ -929,7 +939,7 @@
           const can = new THREE.Mesh(canGeo, canMat);
           can.position.set(cx, -0.62, cz);
           rig.add(can);
-          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), lampMat);
+          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), lampMat);
           lamp.position.set(cx, -0.86, cz);
           rig.add(lamp);
           const glow = new THREE.Sprite(lampGlowMat);
@@ -955,20 +965,37 @@
         rim2.position.set(-17, 10, 13); rim2.target.position.set(0, 1.5, 0);
         scene.add(rim2); scene.add(rim2.target);
 
-        // Subtle volumetric shaft + mat glow pool
-        const coneGeo = new THREE.ConeGeometry(8.6, 19, 36, 1, true);
+        // Subtle volumetric shaft: vertical-gradient texture (bright at the rig,
+        // fading to nothing at the mat) + three nested cones for a soft falloff
+        // instead of one hard-edged polygon shell.
+        function shaftTexture() {
+          const c = document.createElement('canvas'); c.width = 16; c.height = 256;
+          const g = c.getContext('2d');
+          const gr = g.createLinearGradient(0, 0, 0, 256);   // canvas top = cone apex
+          gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+          gr.addColorStop(0.55, 'rgba(255,255,255,0.35)');
+          gr.addColorStop(1, 'rgba(255,255,255,0)');
+          g.fillStyle = gr; g.fillRect(0, 0, 16, 256);
+          return new THREE.CanvasTexture(c);
+        }
+        const coneGeo = new THREE.ConeGeometry(8.6, 19, 48, 1, true);
         const coneMat = new THREE.MeshBasicMaterial({
-          color: 0xfff3cf, transparent: true, opacity: 0.014,
+          color: 0xfff3cf, map: shaftTexture(), transparent: true, opacity: 0.022,
           blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false
         });
         const cone = new THREE.Mesh(coneGeo, coneMat);
         cone.position.y = 10.5;
         scene.add(cone);
         const cone2 = new THREE.Mesh(coneGeo, coneMat.clone());
-        cone2.material.opacity = 0.007;
+        cone2.material.opacity = 0.016;
         cone2.scale.set(0.7, 1, 0.7);
         cone2.position.y = 10.5;
         scene.add(cone2);
+        const cone3 = new THREE.Mesh(coneGeo, coneMat.clone());
+        cone3.material.opacity = 0.02;
+        cone3.scale.set(0.42, 1, 0.42);
+        cone3.position.y = 10.5;
+        scene.add(cone3);
 
         const pool = new THREE.Sprite(new THREE.SpriteMaterial({
           map: glowTexture('rgba(255,240,205,0.5)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.12
@@ -990,8 +1017,10 @@
         }
         const dustGeo = new THREE.BufferGeometry();
         dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        // Round soft particles — without a circular map, points render as squares
         const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
-          color: 0xfff2d0, size: 0.05, transparent: true, opacity: 0.17,
+          color: 0xfff2d0, size: 0.09, transparent: true, opacity: 0.17,
+          map: glowTexture('rgba(255,255,255,1)'),
           blending: THREE.AdditiveBlending, depthWrite: false
         }));
         scene.add(dust);
