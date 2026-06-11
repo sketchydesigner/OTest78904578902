@@ -14,19 +14,31 @@
   The headline lockup uses the official outlined-vector art at /assets/headline.svg.
   The nav logo uses /assets/nav-logo.svg.
 
-  HERO MEDIA — WebGL octagon animation (replaces the old hero.mp4 video).
-  A Three.js scene renders into <canvas class="hero-media__el"> inside the same
-  .hero-media frame (3-edge fade unchanged). Camera: top-down push-in over the
-  illuminated octagon -> orbit revealing all 8 sides -> sweep to an audience
-  view of the empty, dark stadium -> seamless loop. Three.js loads from the
-  cdnjs CDN; if it fails (or WebGL is unavailable, or the visitor prefers
-  reduced motion) the script swaps in assets/hero-poster.jpg instead.
+  HERO MEDIA — WebGL octagon animation (cinema-grade version).
+  Three.js r160 (ES modules via the import map below, served from jsdelivr)
+  renders into <canvas class="hero-media__el"> inside the same .hero-media frame
+  (3-edge fade unchanged). Features: ACES filmic tone mapping, UnrealBloom,
+  physically-based lights, lattice lighting truss with PAR cans, dust motes in
+  the light shaft, stepped concrete seating bowl with ~7,200 instanced seats,
+  subtle handheld camera sway and lamp flicker.
+  Camera loop (~42s, seamless): top-down push-in over the illuminated octagon
+  -> orbit revealing all 8 sides -> ground-level audience view of the empty,
+  dark stadium -> rise back to top-down.
+  Fallbacks: if the CDN/modules/WebGL fail, a watchdog swaps in
+  assets/hero-poster.jpg. prefers-reduced-motion renders one static frame.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,600;1,700;1,800&display=swap" rel="stylesheet">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 
 <style>
   :root {
@@ -492,9 +504,9 @@
   <header class="hero">
 
     <!-- Hero media frame (fades on 3 edges via .hero-media mask).
-         The WebGL octagon animation renders into this canvas. If Three.js or
-         WebGL is unavailable (or reduced motion is preferred), the script
-         below swaps in assets/hero-poster.jpg automatically. -->
+         The WebGL octagon animation renders into this canvas. If the module
+         CDN or WebGL is unavailable, the watchdog below swaps in
+         assets/hero-poster.jpg automatically. -->
     <div class="hero-media" id="heroMedia">
       <canvas class="hero-media__el" id="octagonCanvas" aria-label="Aerial view of an illuminated UFC octagon in a dark, empty stadium"></canvas>
     </div>
@@ -606,293 +618,387 @@
     })();
   </script>
 
-  <!-- ============== HERO: WEBGL OCTAGON ANIMATION ============== -->
+  <!-- Watchdog: if the WebGL hero hasn't started within 6s (no module support,
+       CDN blocked, WebGL unavailable), swap the canvas for the poster still. -->
   <script>
-    (function () {
-      'use strict';
-
+    window.setTimeout(function () {
+      if (window.__ufcHeroStarted) return;
       var canvas = document.getElementById('octagonCanvas');
-      var frame = document.getElementById('heroMedia');
-      if (!canvas || !frame) return;
+      if (!canvas || !canvas.parentNode) return;
+      var img = document.createElement('img');
+      img.className = 'hero-media__el';
+      img.src = 'assets/hero-poster.jpg';
+      img.alt = '';
+      img.onerror = function () { img.style.background = 'radial-gradient(ellipse at center, #1a0505 0%, #000 70%)'; };
+      canvas.parentNode.replaceChild(img, canvas);
+    }, 6000);
+  </script>
 
-      // Swap the canvas for the old poster still if WebGL can't run.
-      function fallbackToPoster() {
-        if (!canvas.parentNode) return;
-        var img = document.createElement('img');
-        img.className = 'hero-media__el';
-        img.src = 'assets/hero-poster.jpg';
-        img.alt = '';
-        img.onerror = function () { img.style.background = 'radial-gradient(ellipse at center, #1a0505 0%, #000 70%)'; };
-        canvas.parentNode.replaceChild(img, canvas);
-      }
+  <!-- ============== HERO: WEBGL OCTAGON ANIMATION ============== -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+    import * as BGU from 'three/addons/utils/BufferGeometryUtils.js';
 
-      function start() {
-        if (start.__started) return;
-        start.__started = true;
-        if (!window.THREE) { fallbackToPoster(); return; }
-        var THREE = window.THREE;
-        var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const frame = document.getElementById('heroMedia');
+    const canvas = document.getElementById('octagonCanvas');
 
-        var renderer;
-        try {
-          renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false, powerPreference: 'low-power' });
-        } catch (e) { fallbackToPoster(); return; }
+    if (frame && canvas) {
+      try {
+        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power' });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-        renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.setClearColor(0x000000, 1);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        var scene = new THREE.Scene();
+        const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x000000, 0.013);
+        const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 400);
 
-        var camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 400);
+        const R = 5, DECK_H = 1.1, FENCE_H = 1.9;
 
-        /* ---------------- Octagon ---------------- */
-        var R = 5;            // cage radius (center -> fence vertex)
-        var DECK_H = 1.1;     // raised platform height
-        var FENCE_H = 1.9;
-
-        // Canvas texture for the mat: dark gray with a red octagonal border line
+        /* ---- Canvas-generated textures (no assets to download) ---- */
         function matTexture() {
-          var c = document.createElement('canvas'); c.width = c.height = 512;
-          var g = c.getContext('2d');
-          g.fillStyle = '#878d94'; g.fillRect(0, 0, 512, 512);
-          // subtle noise
-          for (var i = 0; i < 2600; i++) {
+          const c = document.createElement('canvas'); c.width = c.height = 1024;
+          const g = c.getContext('2d');
+          g.fillStyle = '#82888f'; g.fillRect(0, 0, 1024, 1024);
+          for (let i = 0; i < 5000; i++) {            // grain
             g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.06) + ')';
-            g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+            g.fillRect(Math.random() * 1024, Math.random() * 1024, 2.5, 2.5);
           }
-          // red octagon border ring near the edge
-          g.strokeStyle = '#d20a0a'; g.lineWidth = 22; g.beginPath();
-          for (var k = 0; k <= 8; k++) {
-            var a = k / 8 * Math.PI * 2 + Math.PI / 8;
-            var x = 256 + Math.cos(a) * 210, y = 256 + Math.sin(a) * 210;
+          for (let i = 0; i < 70; i++) {              // scuff streaks
+            g.save();
+            g.translate(Math.random() * 1024, Math.random() * 1024);
+            g.rotate(Math.random() * Math.PI);
+            g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+            g.fillRect(0, 0, 30 + Math.random() * 120, 2 + Math.random() * 3);
+            g.restore();
+          }
+          g.strokeStyle = '#d20a0a'; g.lineWidth = 44; g.beginPath();   // red octagon border
+          for (let k = 0; k <= 8; k++) {
+            const a = k / 8 * Math.PI * 2 + Math.PI / 8;
+            const x = 512 + Math.cos(a) * 420, y = 512 + Math.sin(a) * 420;
             k === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
           }
           g.stroke();
-          // faint center mark
-          g.strokeStyle = 'rgba(35,35,40,0.7)'; g.lineWidth = 6;
-          g.beginPath(); g.arc(256, 256, 62, 0, Math.PI * 2); g.stroke();
-          var t = new THREE.CanvasTexture(c);
+          for (let k = 0; k < 8; k++) {               // generic sponsor blocks
+            const a = k / 8 * Math.PI * 2;
+            g.save();
+            g.translate(512 + Math.cos(a) * 300, 512 + Math.sin(a) * 300);
+            g.rotate(a + Math.PI / 2);
+            g.fillStyle = 'rgba(90,96,104,0.55)';
+            g.fillRect(-46, -16, 92, 32);
+            g.restore();
+          }
+          g.strokeStyle = 'rgba(30,30,34,0.7)'; g.lineWidth = 10; g.beginPath();  // center mark
+          for (let k = 0; k <= 8; k++) {
+            const a = k / 8 * Math.PI * 2 + Math.PI / 8;
+            const x = 512 + Math.cos(a) * 120, y = 512 + Math.sin(a) * 120;
+            k === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+          }
+          g.stroke();
+          const t = new THREE.CanvasTexture(c);
+          t.colorSpace = THREE.SRGBColorSpace;
           return t;
         }
 
-        // Chain-link texture (transparent) for the cage walls
         function fenceTexture() {
-          var c = document.createElement('canvas'); c.width = c.height = 128;
-          var g = c.getContext('2d');
-          g.clearRect(0, 0, 128, 128);
+          const c = document.createElement('canvas'); c.width = c.height = 128;
+          const g = c.getContext('2d');
           g.strokeStyle = 'rgba(150,155,162,0.9)'; g.lineWidth = 2.2;
-          for (var i = -128; i <= 256; i += 16) {
+          for (let i = -128; i <= 256; i += 16) {
             g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke();
             g.beginPath(); g.moveTo(i + 128, 0); g.lineTo(i, 128); g.stroke();
           }
-          var t = new THREE.CanvasTexture(c);
+          const t = new THREE.CanvasTexture(c);
           t.wrapS = t.wrapT = THREE.RepeatWrapping;
           return t;
         }
 
-        var octagon = new THREE.Group();
+        function glowTexture(colA) {
+          const c = document.createElement('canvas'); c.width = c.height = 64;
+          const g = c.getContext('2d');
+          const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+          gr.addColorStop(0, colA); gr.addColorStop(1, 'rgba(0,0,0,0)');
+          g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+          return new THREE.CanvasTexture(c);
+        }
 
-        // Deck (octagonal prism) — top face carries the mat texture
-        var deckGeo = new THREE.CylinderGeometry(R + 1.7, R + 2.1, DECK_H, 8, 1, false);
-        var deckSide = new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.9 });
-        var deckTop = new THREE.MeshStandardMaterial({ map: matTexture(), roughness: 0.95 });
-        var deckBottom = new THREE.MeshStandardMaterial({ color: 0x050505 });
-        var deck = new THREE.Mesh(deckGeo, [deckSide, deckTop, deckBottom]);
+        /* ---------------- Octagon ---------------- */
+        const octagon = new THREE.Group();
+
+        const deck = new THREE.Mesh(
+          new THREE.CylinderGeometry(R + 1.7, R + 2.1, DECK_H, 8, 1, false),
+          [
+            new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.9 }),
+            new THREE.MeshStandardMaterial({ map: matTexture(), roughness: 0.95 }),
+            new THREE.MeshStandardMaterial({ color: 0x050505 })
+          ]
+        );
         deck.rotation.y = Math.PI / 8;
         deck.position.y = DECK_H / 2;
         deck.receiveShadow = true;
         octagon.add(deck);
 
-        // Red trim band around the deck top edge
-        var trimGeo = new THREE.CylinderGeometry(R + 1.72, R + 1.72, 0.1, 8, 1, true);
-        var trim = new THREE.Mesh(trimGeo, new THREE.MeshStandardMaterial({
-          color: 0xd20a0a, emissive: 0x550404, roughness: 0.6, side: THREE.DoubleSide
-        }));
+        const trim = new THREE.Mesh(
+          new THREE.CylinderGeometry(R + 1.72, R + 1.72, 0.1, 8, 1, true),
+          new THREE.MeshStandardMaterial({ color: 0xd20a0a, emissive: 0x550404, roughness: 0.6, side: THREE.DoubleSide })
+        );
         trim.rotation.y = Math.PI / 8;
         trim.position.y = DECK_H - 0.05;
         octagon.add(trim);
 
-        // Fence: 8 chain-link panels between padded posts
-        var fenceTex = fenceTexture();
-        var sideLen = 2 * R * Math.sin(Math.PI / 8);
-        var fenceMat = new THREE.MeshStandardMaterial({
+        const fenceTex = fenceTexture();
+        const sideLen = 2 * R * Math.sin(Math.PI / 8);
+        const fenceMat = new THREE.MeshStandardMaterial({
           map: fenceTex, transparent: true, side: THREE.DoubleSide,
-          roughness: 0.55, metalness: 0.55, alphaTest: 0.15, color: 0xbfc4cc
+          roughness: 0.4, metalness: 0.7, alphaTest: 0.15, color: 0xbfc4cc
         });
         fenceTex.repeat.set(sideLen / 0.45, FENCE_H / 0.45);
-        var panelGeo = new THREE.PlaneGeometry(sideLen, FENCE_H);
-        var postGeo = new THREE.CylinderGeometry(0.13, 0.13, FENCE_H + 0.25, 10);
-        var postMat = new THREE.MeshStandardMaterial({ color: 0x16161a, roughness: 0.7 });
-        var railGeo = new THREE.BoxGeometry(sideLen, 0.34, 0.16);
-        var railMat = new THREE.MeshStandardMaterial({ color: 0x101013, roughness: 0.8 });
+        const panelGeo = new THREE.PlaneGeometry(sideLen, FENCE_H);
+        const postGeo = new THREE.CylinderGeometry(0.13, 0.13, FENCE_H + 0.25, 10);
+        const postMat = new THREE.MeshStandardMaterial({ color: 0x141417, roughness: 0.6 });
+        const railGeo = new THREE.BoxGeometry(sideLen, 0.34, 0.18);
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x101013, roughness: 0.55 });
 
-        for (var s = 0; s < 8; s++) {
-          var a0 = s / 8 * Math.PI * 2 + Math.PI / 8;
-          var a1 = (s + 1) / 8 * Math.PI * 2 + Math.PI / 8;
-          var mx = (Math.cos(a0) + Math.cos(a1)) / 2 * R;
-          var mz = (Math.sin(a0) + Math.sin(a1)) / 2 * R;
-          var ang = Math.atan2(mx, mz); // plane faces outward
+        for (let s = 0; s < 8; s++) {
+          const a0 = s / 8 * Math.PI * 2 + Math.PI / 8;
+          const a1 = (s + 1) / 8 * Math.PI * 2 + Math.PI / 8;
+          const mx = (Math.cos(a0) + Math.cos(a1)) / 2 * R;
+          const mz = (Math.sin(a0) + Math.sin(a1)) / 2 * R;
+          const ang = Math.atan2(mx, mz);
 
-          var panel = new THREE.Mesh(panelGeo, fenceMat);
+          const panel = new THREE.Mesh(panelGeo, fenceMat);
           panel.position.set(mx, DECK_H + FENCE_H / 2, mz);
           panel.rotation.y = ang;
           panel.castShadow = true;
           octagon.add(panel);
 
-          var rail = new THREE.Mesh(railGeo, railMat);
+          const rail = new THREE.Mesh(railGeo, railMat);
           rail.position.set(mx, DECK_H + FENCE_H + 0.1, mz);
           rail.rotation.y = ang;
           octagon.add(rail);
 
-          var post = new THREE.Mesh(postGeo, postMat);
+          const post = new THREE.Mesh(postGeo, postMat);
           post.position.set(Math.cos(a0) * R, DECK_H + (FENCE_H + 0.25) / 2, Math.sin(a0) * R);
           octagon.add(post);
+
+          // red / blue corner pads
+          if (s === 1 || s === 5) {
+            const pad = new THREE.Mesh(
+              new THREE.BoxGeometry(0.36, 0.55, 0.36),
+              new THREE.MeshStandardMaterial({ color: s === 1 ? 0xa50e0e : 0x10337e, roughness: 0.5 })
+            );
+            pad.position.set(Math.cos(a0) * R, DECK_H + FENCE_H - 0.2, Math.sin(a0) * R);
+            octagon.add(pad);
+          }
         }
         scene.add(octagon);
 
-        /* ---------------- Arena floor ---------------- */
-        var floor = new THREE.Mesh(
+        /* ---------------- Arena floor + seating bowl ---------------- */
+        const floor = new THREE.Mesh(
           new THREE.CircleGeometry(120, 48),
-          new THREE.MeshStandardMaterial({ color: 0x070708, roughness: 0.95 })
+          new THREE.MeshStandardMaterial({ color: 0x08080a, roughness: 0.92 })
         );
         floor.rotation.x = -Math.PI / 2;
         floor.receiveShadow = true;
         scene.add(floor);
 
-        /* ---------------- Seating bowl (instanced, empty seats) ---------------- */
-        var seatGeo = new THREE.BoxGeometry(0.5, 0.55, 0.45);
-        var seatMat = new THREE.MeshStandardMaterial({ color: 0x171d29, roughness: 0.9 });
-        var rows = 26, inner = 17, count = 0, positions = [];
-        for (var r = 0; r < rows; r++) {
-          var rad = inner + r * 1.55;
-          var y = 0.6 + r * 0.82;
-          var step = 0.78 / rad;
-          for (var a = 0; a < Math.PI * 2; a += step) {
-            // leave 4 aisle gaps
-            var frac = (a / (Math.PI * 2)) % 0.25;
-            if (frac < 0.012) continue;
-            positions.push([Math.cos(a) * rad, y, Math.sin(a) * rad, -a + Math.PI / 2]);
+        const rows = 26, inner = 17;
+
+        // Stepped concrete tiers (one lathe mesh)
+        const prof = [new THREE.Vector2(15.8, 0)];
+        for (let r = 0; r < rows; r++) {
+          const rad = inner + r * 1.55, y = 0.2 + r * 0.82;
+          prof.push(new THREE.Vector2(rad - 0.8, y), new THREE.Vector2(rad + 0.8, y));
+        }
+        prof.push(new THREE.Vector2(inner + (rows - 1) * 1.55 + 1.2, 0.2 + (rows - 1) * 0.82 + 3.2));
+        const lathe = new THREE.Mesh(
+          new THREE.LatheGeometry(prof, 64),
+          new THREE.MeshStandardMaterial({ color: 0x0b0d11, roughness: 1, side: THREE.DoubleSide })
+        );
+        scene.add(lathe);
+
+        // Instanced seats (base + back) with per-seat color variation
+        const sBase = new THREE.BoxGeometry(0.46, 0.1, 0.42); sBase.translate(0, 0.27, 0);
+        const sBack = new THREE.BoxGeometry(0.46, 0.42, 0.07); sBack.translate(0, 0.52, -0.19);
+        const seatGeo = BGU.mergeGeometries([sBase, sBack]);
+        const seatMat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+        const positions = [];
+        let count = 0;
+        for (let r = 0; r < rows; r++) {
+          const rad = inner + r * 1.55, y = 0.2 + r * 0.82, step = 0.78 / rad;
+          for (let a = 0; a < Math.PI * 2; a += step) {
+            const frac = (a / (Math.PI * 2)) % 0.25;
+            if (frac < 0.012) continue;   // aisle gaps
+            positions.push([Math.cos(a) * rad, y, Math.sin(a) * rad, -a + Math.PI / 2 + (Math.random() - 0.5) * 0.04]);
             count++;
           }
         }
-        var seats = new THREE.InstancedMesh(seatGeo, seatMat, count);
-        var dummy = new THREE.Object3D();
-        for (var i2 = 0; i2 < count; i2++) {
-          var p = positions[i2];
+        const seats = new THREE.InstancedMesh(seatGeo, seatMat, count);
+        const dummy = new THREE.Object3D();
+        const col = new THREE.Color();
+        const palette = [0x1a2233, 0x161d2b, 0x131927, 0x1d2536];
+        for (let i = 0; i < count; i++) {
+          const p = positions[i];
           dummy.position.set(p[0], p[1], p[2]);
           dummy.rotation.set(0, p[3], 0);
           dummy.updateMatrix();
-          seats.setMatrixAt(i2, dummy.matrix);
+          seats.setMatrixAt(i, dummy.matrix);
+          col.setHex(palette[(Math.random() * palette.length) | 0]).multiplyScalar(0.85 + Math.random() * 0.3);
+          seats.setColorAt(i, col);
         }
         scene.add(seats);
 
-        // Concrete tier shell under the seats
-        var bowl = new THREE.Mesh(
-          new THREE.CylinderGeometry(inner + rows * 1.55 + 2, inner - 1.5, rows * 0.82 + 1.4, 48, 1, true),
-          new THREE.MeshStandardMaterial({ color: 0x0a0c10, roughness: 1, side: THREE.DoubleSide })
-        );
-        bowl.position.y = (rows * 0.82 + 1.4) / 2 - 0.4;
-        scene.add(bowl);
+        // Faint LED fascia ribbons around the bowl
+        const ribMat = new THREE.MeshBasicMaterial({ color: 0x2a0606, side: THREE.DoubleSide });
+        const rib1 = new THREE.Mesh(new THREE.CylinderGeometry(inner + 13 * 1.55, inner + 13 * 1.55, 0.45, 64, 1, true), ribMat);
+        rib1.position.y = 0.2 + 13 * 0.82 + 1.0;
+        scene.add(rib1);
+        const rib2 = new THREE.Mesh(new THREE.CylinderGeometry(inner + 25 * 1.55 + 1.1, inner + 25 * 1.55 + 1.1, 0.5, 64, 1, true), ribMat);
+        rib2.position.y = 0.2 + 25 * 0.82 + 1.4;
+        scene.add(rib2);
 
-        /* ---------------- Scattered concourse lights ---------------- */
-        function glowTexture(colA) {
-          var c = document.createElement('canvas'); c.width = c.height = 64;
-          var g = c.getContext('2d');
-          var gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
-          gr.addColorStop(0, colA); gr.addColorStop(1, 'rgba(0,0,0,0)');
-          g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-          return new THREE.CanvasTexture(c);
-        }
-        var dotTexW = glowTexture('rgba(210,215,230,0.9)');
-        var dotTexR = glowTexture('rgba(210,30,20,0.9)');
-        var dotMatW = new THREE.SpriteMaterial({ map: dotTexW, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 });
-        var dotMatR = new THREE.SpriteMaterial({ map: dotTexR, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 });
-        for (var d = 0; d < 64; d++) {
-          var ang2 = Math.random() * Math.PI * 2;
-          var rr = inner + 2 + Math.random() * (rows * 1.55 - 4);
-          var sp = new THREE.Sprite(Math.random() < 0.22 ? dotMatR : dotMatW);
-          sp.position.set(Math.cos(ang2) * rr, 1.2 + ((rr - inner) / 1.55) * 0.82 + Math.random() * 1.2, Math.sin(ang2) * rr);
-          var sc = 0.5 + Math.random() * 0.9;
+        // Scattered concourse lights
+        const dotMatW = new THREE.SpriteMaterial({ map: glowTexture('rgba(210,215,230,0.9)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 });
+        const dotMatR = new THREE.SpriteMaterial({ map: glowTexture('rgba(210,30,20,0.9)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 });
+        for (let d = 0; d < 48; d++) {
+          const ang2 = Math.random() * Math.PI * 2;
+          const rr = inner + 2 + Math.random() * (rows * 1.55 - 4);
+          const sp = new THREE.Sprite(Math.random() < 0.22 ? dotMatR : dotMatW);
+          sp.position.set(Math.cos(ang2) * rr, 1.4 + ((rr - inner) / 1.55) * 0.82 + Math.random() * 1.2, Math.sin(ang2) * rr);
+          const sc = 0.4 + Math.random() * 0.8;
           sp.scale.set(sc, sc, 1);
           scene.add(sp);
         }
 
-        /* ---------------- Lighting ---------------- */
-        scene.add(new THREE.HemisphereLight(0x111a2e, 0x000000, 0.55));
+        /* ---------------- Lighting rig (lattice truss + PAR cans) ---------------- */
+        scene.add(new THREE.HemisphereLight(0x16203a, 0x000000, 0.5));
 
-        // Lighting truss above the cage
-        var rig = new THREE.Group();
-        var rigFrame = new THREE.Mesh(
-          new THREE.CylinderGeometry(6.4, 6.4, 0.5, 8, 1, true),
-          new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.8, side: THREE.DoubleSide })
-        );
-        rigFrame.rotation.y = Math.PI / 8;
-        rig.add(rigFrame);
-        // glowing lamp heads on the truss
-        var lampGeo = new THREE.SphereGeometry(0.22, 10, 10);
-        var lampMat = new THREE.MeshBasicMaterial({ color: 0xfff4d8 });
-        var lampGlowMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(255,244,216,0.95)'), blending: THREE.AdditiveBlending, depthWrite: false });
-        for (var l = 0; l < 8; l++) {
-          var la = l / 8 * Math.PI * 2 + Math.PI / 8;
-          var lamp = new THREE.Mesh(lampGeo, lampMat);
-          lamp.position.set(Math.cos(la) * 5.6, -0.3, Math.sin(la) * 5.6);
+        const rig = new THREE.Group();
+        const trussParts = [];
+        const TR = 6.4, chordLen = 2 * TR * Math.sin(Math.PI / 8);
+        function addBox(w, h, d, x, y, z, ry) {
+          const g = new THREE.BoxGeometry(w, h, d);
+          g.applyMatrix4(new THREE.Matrix4().makeRotationY(ry).setPosition(x, y, z));
+          trussParts.push(g);
+        }
+        for (let s = 0; s < 8; s++) {
+          const a0 = s / 8 * Math.PI * 2 + Math.PI / 8;
+          const a1 = (s + 1) / 8 * Math.PI * 2 + Math.PI / 8;
+          const v0x = Math.cos(a0) * TR, v0z = Math.sin(a0) * TR;
+          const v1x = Math.cos(a1) * TR, v1z = Math.sin(a1) * TR;
+          const mx = (v0x + v1x) / 2, mz = (v0z + v1z) / 2;
+          const ang = Math.atan2(v1x - v0x, v1z - v0z);
+          addBox(0.09, 0.09, chordLen, mx, 0.45, mz, ang);   // top chord
+          addBox(0.09, 0.09, chordLen, mx, -0.45, mz, ang);  // bottom chord
+          for (let f = 1; f < 4; f++) {                      // vertical struts
+            const fx = v0x + (v1x - v0x) * f / 4, fz = v0z + (v1z - v0z) * f / 4;
+            addBox(0.07, 0.9, 0.07, fx, 0, fz, 0);
+          }
+        }
+        rig.add(new THREE.Mesh(
+          BGU.mergeGeometries(trussParts),
+          new THREE.MeshStandardMaterial({ color: 0x17171b, metalness: 0.7, roughness: 0.45 })
+        ));
+
+        // Rigging cables up into the dark
+        const cabMat = new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.8 });
+        for (let c = 0; c < 4; c++) {
+          const ca = c / 4 * Math.PI * 2 + Math.PI / 4;
+          const cab = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 14, 6), cabMat);
+          cab.position.set(Math.cos(ca) * 6.35, 7.5, Math.sin(ca) * 6.35);
+          rig.add(cab);
+        }
+
+        // PAR cans + over-bright lamp cores (bloom picks these up)
+        const lampMat = new THREE.MeshBasicMaterial();
+        lampMat.color.setRGB(7, 6.2, 4.6);
+        const canGeo = new THREE.CylinderGeometry(0.17, 0.21, 0.42, 12);
+        const canMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1e, roughness: 0.6 });
+        const lampGlowMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(255,244,216,0.9)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 });
+        for (let l = 0; l < 8; l++) {
+          const la = l / 8 * Math.PI * 2 + Math.PI / 8;
+          const cx = Math.cos(la) * 5.6, cz = Math.sin(la) * 5.6;
+          const can = new THREE.Mesh(canGeo, canMat);
+          can.position.set(cx, -0.62, cz);
+          rig.add(can);
+          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), lampMat);
+          lamp.position.set(cx, -0.86, cz);
           rig.add(lamp);
-          var glow = new THREE.Sprite(lampGlowMat);
-          glow.position.copy(lamp.position);
-          glow.scale.set(2.6, 2.6, 1);
+          const glow = new THREE.Sprite(lampGlowMat);
+          glow.position.set(cx, -0.86, cz);
+          glow.scale.set(1.15, 1.15, 1);
           rig.add(glow);
         }
         rig.position.y = 21;
         scene.add(rig);
 
-        // Key spotlight straight down onto the mat
-        var spot = new THREE.SpotLight(0xfff1d6, 1.45, 90, 0.42, 0.55, 1.1);
-        spot.position.set(0, 21, 0);
-        spot.target.position.set(0, 0, 0);
+        // Key spot (physical units), flickers subtly in the loop
+        const spot = new THREE.SpotLight(0xfff1d6, 1050, 0, 0.40, 0.6, 2);
+        spot.position.set(0, 20.3, 0);
         spot.castShadow = true;
-        spot.shadow.mapSize.set(1024, 1024);
+        spot.shadow.mapSize.set(2048, 2048);
+        spot.shadow.bias = -0.0003;
         scene.add(spot); scene.add(spot.target);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        // Two cool rim spots so the fence reads from the audience side
-        var rim1 = new THREE.SpotLight(0x6f86c2, 0.7, 80, 0.6, 0.7, 1.4);
+        const rim1 = new THREE.SpotLight(0x6f86c2, 420, 0, 0.6, 0.7, 2);
         rim1.position.set(18, 12, -14); rim1.target.position.set(0, 1.5, 0);
         scene.add(rim1); scene.add(rim1.target);
-        var rim2 = new THREE.SpotLight(0xc24a3a, 0.45, 80, 0.65, 0.8, 1.5);
+        const rim2 = new THREE.SpotLight(0xc24a3a, 260, 0, 0.65, 0.8, 2);
         rim2.position.set(-17, 10, 13); rim2.target.position.set(0, 1.5, 0);
         scene.add(rim2); scene.add(rim2.target);
 
-        // Fake volumetric light cone from the rig down over the cage
-        var coneGeo = new THREE.ConeGeometry(8.6, 20, 36, 1, true);
-        var coneMat = new THREE.MeshBasicMaterial({
-          color: 0xfff3cf, transparent: true, opacity: 0.05,
+        // Subtle volumetric shaft + mat glow pool
+        const coneGeo = new THREE.ConeGeometry(8.6, 19, 36, 1, true);
+        const coneMat = new THREE.MeshBasicMaterial({
+          color: 0xfff3cf, transparent: true, opacity: 0.014,
           blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false
         });
-        var cone = new THREE.Mesh(coneGeo, coneMat);
-        cone.position.y = 21 - 10;
+        const cone = new THREE.Mesh(coneGeo, coneMat);
+        cone.position.y = 10.5;
         scene.add(cone);
-        var cone2 = new THREE.Mesh(coneGeo, coneMat.clone());
-        cone2.material.opacity = 0.03;
+        const cone2 = new THREE.Mesh(coneGeo, coneMat.clone());
+        cone2.material.opacity = 0.007;
         cone2.scale.set(0.7, 1, 0.7);
-        cone2.position.y = cone.position.y;
+        cone2.position.y = 10.5;
         scene.add(cone2);
 
-        // Soft glow pool on the mat
-        var pool = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: glowTexture('rgba(255,240,205,0.5)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.28
+        const pool = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture('rgba(255,240,205,0.5)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.12
         }));
         pool.position.y = DECK_H + 0.3;
         pool.scale.set(17, 17, 1);
         scene.add(pool);
 
+        // Dust motes drifting in the shaft
+        const DUST = 420;
+        const dustPos = new Float32Array(DUST * 3);
+        const dustSpd = new Float32Array(DUST);
+        for (let i = 0; i < DUST; i++) {
+          const dr = Math.random() * 7, da = Math.random() * Math.PI * 2;
+          dustPos[i * 3] = Math.cos(da) * dr;
+          dustPos[i * 3 + 1] = 1.5 + Math.random() * 17.5;
+          dustPos[i * 3 + 2] = Math.sin(da) * dr;
+          dustSpd[i] = 0.1 + Math.random() * 0.25;
+        }
+        const dustGeo = new THREE.BufferGeometry();
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+          color: 0xfff2d0, size: 0.05, transparent: true, opacity: 0.17,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        scene.add(dust);
+
         /* ---------------- Camera path (closed loop) ---------------- */
-        // Position curve: top-down -> push in (all 8 sides) -> low orbit ->
-        // ground-level audience view (dwell) -> rise back to top-down.
-        var camCurve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(0.6, 33, 4.5),     // 0 high above, near top-down
+        const camCurve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(2.5, 33.5, 7.5),   // 0 high above, near top-down
           new THREE.Vector3(5.5, 25, 9),       // 1 pushing in
           new THREE.Vector3(12.5, 13, 11),     // 2 descending, sides revealed
           new THREE.Vector3(14.5, 6.2, -4.5),  // 3 low orbit
@@ -903,8 +1009,7 @@
           new THREE.Vector3(-7, 25, 4)         // 8 rising to rejoin loop
         ], true, 'centripetal');
 
-        // LookAt curve (same point count so phases stay in sync)
-        var tgtCurve = new THREE.CatmullRomCurve3([
+        const tgtCurve = new THREE.CatmullRomCurve3([
           new THREE.Vector3(0, 0.8, 0),
           new THREE.Vector3(0, 1.0, 0),
           new THREE.Vector3(0, 1.5, 0),
@@ -916,19 +1021,29 @@
           new THREE.Vector3(0, 1.2, 0)
         ], true, 'centripetal');
 
-        var DURATION = 42000; // ms per loop
-
-        function placeCamera(u) {
-          var pos = camCurve.getPoint(u);
-          var tgt = tgtCurve.getPoint(u);
+        function placeCamera(u, t) {
+          const pos = camCurve.getPoint(u);
+          const tgt = tgtCurve.getPoint(u);
+          // handheld sway
+          pos.x += 0.13 * Math.sin(t * 0.31);
+          pos.y += 0.09 * Math.sin(t * 0.47 + 1.3);
+          pos.z += 0.11 * Math.sin(t * 0.23 + 2.1);
+          tgt.x += 0.25 * Math.sin(t * 0.19);
+          tgt.y += 0.15 * Math.sin(t * 0.29 + 0.7);
           camera.position.copy(pos);
           camera.lookAt(tgt);
         }
 
-        /* ---------------- Sizing ---------------- */
+        /* ---------------- Post-processing ---------------- */
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(800, 450), 0.5, 0.5, 0.82));
+        composer.addPass(new OutputPass());
+
         function resize() {
-          var w = frame.clientWidth || 1, h = frame.clientHeight || 1;
+          const w = frame.clientWidth || 1, h = frame.clientHeight || 1;
           renderer.setSize(w, h, false);
+          composer.setSize(w, h);
           camera.aspect = w / h;
           camera.updateProjectionMatrix();
         }
@@ -938,53 +1053,47 @@
 
         /* ---------------- Render loop ---------------- */
         if (reduceMotion) {
-          // Static cinematic frame, no animation
-          placeCamera(0.30);
-          renderer.render(scene, camera);
-          return;
-        }
-
-        var visible = true, raf = null, t0 = performance.now();
-        function tick(now) {
-          raf = null;
-          if (!visible) return;
-          var u = ((now - t0) % DURATION) / DURATION;
-          placeCamera(u);
-          renderer.render(scene, camera);
-          raf = requestAnimationFrame(tick);
-        }
-        function play() { if (!raf && visible) raf = requestAnimationFrame(tick); }
-        function halt() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
-
-        if (window.IntersectionObserver) {
-          new IntersectionObserver(function (entries) {
-            visible = entries[0].isIntersecting;
-            visible ? play() : halt();
-          }, { threshold: 0.02 }).observe(frame);
-        }
-        document.addEventListener('visibilitychange', function () {
-          document.hidden ? halt() : play();
-        });
-        play();
-      }
-
-      // Wait for the deferred three.js script (or its failure)
-      if (window.THREE) start();
-      else {
-        var scripts = document.querySelectorAll('script[src*="three"]');
-        var threeScript = scripts.length ? scripts[scripts.length - 1] : null;
-        if (threeScript) {
-          threeScript.addEventListener('load', start);
-          threeScript.addEventListener('error', fallbackToPoster);
-          // Safety net in case load already happened
-          window.addEventListener('load', function () {
-            window.setTimeout(function () { window.THREE ? start() : fallbackToPoster(); }, 50);
-          });
+          placeCamera(0.30, 5);
+          composer.render();
+          window.__ufcHeroStarted = true;
         } else {
-          window.addEventListener('load', function () { window.THREE ? start() : fallbackToPoster(); });
+          const DURATION = 42000;
+          const baseSpot = 1050;
+          let t0 = performance.now(), raf = null, visible = true;
+
+          function tick(now) {
+            raf = null;
+            if (!visible || document.hidden) return;
+            const u = ((now - t0) % DURATION) / DURATION;
+            const t = now / 1000;
+            spot.intensity = baseSpot * (1 + 0.035 * Math.sin(t * 13) + 0.02 * Math.sin(t * 31));
+            for (let i = 0; i < DUST; i++) {
+              dustPos[i * 3 + 1] += dustSpd[i] * 0.016;
+              if (dustPos[i * 3 + 1] > 19) dustPos[i * 3 + 1] = 1.5;
+              dustPos[i * 3] += Math.sin(t * 0.2 + i) * 0.0012;
+            }
+            dustGeo.attributes.position.needsUpdate = true;
+            placeCamera(u, t);
+            composer.render();
+            raf = requestAnimationFrame(tick);
+          }
+          const play = () => { if (!raf && visible && !document.hidden) raf = requestAnimationFrame(tick); };
+          const halt = () => { if (raf) { cancelAnimationFrame(raf); raf = null; } };
+
+          if (window.IntersectionObserver) {
+            new IntersectionObserver((entries) => {
+              visible = entries[0].isIntersecting;
+              visible ? play() : halt();
+            }, { threshold: 0.02 }).observe(frame);
+          }
+          document.addEventListener('visibilitychange', () => { document.hidden ? halt() : play(); });
+          play();
+          window.__ufcHeroStarted = true;
         }
+      } catch (e) {
+        /* watchdog will swap in the poster */
       }
-    })();
+    }
   </script>
 
 </body>
