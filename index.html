@@ -1035,11 +1035,18 @@
         cone3.position.y = 10.2;
         scene.add(cone3);
 
-        const pool = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: glowTexture('rgba(255,240,205,0.5)'), blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.12
-        }));
-        pool.position.y = DECK_H + 0.3;
-        pool.scale.set(17, 17, 1);
+        // Warm glow pool: a flat plane PARALLEL to the mat (a sprite here would
+        // rotate to face the camera, pierce the deck at oblique angles, and get
+        // depth-clipped along a hard straight line across the mat).
+        const pool = new THREE.Mesh(
+          new THREE.PlaneGeometry(17, 17),
+          new THREE.MeshBasicMaterial({
+            map: glowTexture('rgba(255,240,205,0.5)'), transparent: true, opacity: 0.12,
+            blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+          })
+        );
+        pool.rotation.x = -Math.PI / 2;
+        pool.position.y = DECK_H + 0.06;
         scene.add(pool);
 
         // Dust motes drifting in the shaft
