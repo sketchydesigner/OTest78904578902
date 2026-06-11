@@ -1087,6 +1087,10 @@
             }, { threshold: 0.02 }).observe(frame);
           }
           document.addEventListener('visibilitychange', () => { document.hidden ? halt() : play(); });
+          // Synchronous first frame so the hero is never black while RAF is
+          // throttled (background tab/window) or before the first tick.
+          placeCamera(0, 0);
+          composer.render();
           play();
           window.__ufcHeroStarted = true;
         }
