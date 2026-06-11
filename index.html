@@ -667,44 +667,69 @@
         function matTexture() {
           const c = document.createElement('canvas'); c.width = c.height = 1024;
           const g = c.getContext('2d');
-          g.fillStyle = '#82888f'; g.fillRect(0, 0, 1024, 1024);
-          for (let i = 0; i < 5000; i++) {            // grain
-            g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.06) + ')';
-            g.fillRect(Math.random() * 1024, Math.random() * 1024, 2.5, 2.5);
+          function draw() {
+            g.setTransform(1, 0, 0, 1, 0, 0);
+            g.fillStyle = '#82888f'; g.fillRect(0, 0, 1024, 1024);
+            for (let i = 0; i < 5000; i++) {            // grain
+              g.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.06) + ')';
+              g.fillRect(Math.random() * 1024, Math.random() * 1024, 2.5, 2.5);
+            }
+            for (let i = 0; i < 70; i++) {              // scuff streaks
+              g.save();
+              g.translate(Math.random() * 1024, Math.random() * 1024);
+              g.rotate(Math.random() * Math.PI);
+              g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+              g.fillRect(0, 0, 30 + Math.random() * 120, 2 + Math.random() * 3);
+              g.restore();
+            }
+            g.strokeStyle = '#d20a0a'; g.lineWidth = 44; g.beginPath();   // red octagon border
+            for (let k = 0; k <= 8; k++) {
+              const a = k / 8 * Math.PI * 2 + Math.PI / 8;
+              const x = 512 + Math.cos(a) * 420, y = 512 + Math.sin(a) * 420;
+              k === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+            }
+            g.stroke();
+            for (let k = 0; k < 8; k++) {               // generic sponsor blocks
+              if (k === 2 || k === 6) continue;         // UFC wordmarks go here
+              const a = k / 8 * Math.PI * 2;
+              g.save();
+              g.translate(512 + Math.cos(a) * 300, 512 + Math.sin(a) * 300);
+              g.rotate(a + Math.PI / 2);
+              g.fillStyle = 'rgba(90,96,104,0.55)';
+              g.fillRect(-46, -16, 92, 32);
+              g.restore();
+            }
+            g.strokeStyle = 'rgba(30,30,34,0.7)'; g.lineWidth = 10; g.beginPath();  // center mark
+            for (let k = 0; k <= 8; k++) {
+              const a = k / 8 * Math.PI * 2 + Math.PI / 8;
+              const x = 512 + Math.cos(a) * 120, y = 512 + Math.sin(a) * 120;
+              k === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
+            }
+            g.stroke();
+            // Red UFC wordmarks near the edge (like the broadcast mat) —
+            // approximated with Saira Condensed heavy italic, slightly skewed,
+            // matching the carousel badge treatment.
+            [Math.PI / 2, Math.PI * 1.5].forEach((a) => {
+              g.save();
+              g.translate(512 + Math.cos(a) * 295, 512 + Math.sin(a) * 295);
+              g.rotate(a + Math.PI / 2);
+              g.transform(1, 0, -0.12, 1, 0, 0);
+              g.fillStyle = '#d20a0a';
+              g.font = 'italic 900 120px "Saira Condensed", "Arial Narrow", Impact, sans-serif';
+              g.textAlign = 'center'; g.textBaseline = 'middle';
+              g.fillText('UFC', 0, 0);
+              g.restore();
+            });
           }
-          for (let i = 0; i < 70; i++) {              // scuff streaks
-            g.save();
-            g.translate(Math.random() * 1024, Math.random() * 1024);
-            g.rotate(Math.random() * Math.PI);
-            g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
-            g.fillRect(0, 0, 30 + Math.random() * 120, 2 + Math.random() * 3);
-            g.restore();
-          }
-          g.strokeStyle = '#d20a0a'; g.lineWidth = 44; g.beginPath();   // red octagon border
-          for (let k = 0; k <= 8; k++) {
-            const a = k / 8 * Math.PI * 2 + Math.PI / 8;
-            const x = 512 + Math.cos(a) * 420, y = 512 + Math.sin(a) * 420;
-            k === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
-          }
-          g.stroke();
-          for (let k = 0; k < 8; k++) {               // generic sponsor blocks
-            const a = k / 8 * Math.PI * 2;
-            g.save();
-            g.translate(512 + Math.cos(a) * 300, 512 + Math.sin(a) * 300);
-            g.rotate(a + Math.PI / 2);
-            g.fillStyle = 'rgba(90,96,104,0.55)';
-            g.fillRect(-46, -16, 92, 32);
-            g.restore();
-          }
-          g.strokeStyle = 'rgba(30,30,34,0.7)'; g.lineWidth = 10; g.beginPath();  // center mark
-          for (let k = 0; k <= 8; k++) {
-            const a = k / 8 * Math.PI * 2 + Math.PI / 8;
-            const x = 512 + Math.cos(a) * 120, y = 512 + Math.sin(a) * 120;
-            k === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
-          }
-          g.stroke();
+          draw();
           const t = new THREE.CanvasTexture(c);
           t.colorSpace = THREE.SRGBColorSpace;
+          // Redraw once the brand-ish webfont is ready (first paint may use the fallback)
+          if (document.fonts && document.fonts.load) {
+            document.fonts.load('italic 900 120px "Saira Condensed"')
+              .then(() => { draw(); t.needsUpdate = true; })
+              .catch(() => {});
+          }
           return t;
         }
 
